@@ -60,6 +60,7 @@ class Pilmoji:
         cache: bool = True,
         draw: Optional[ImageDraw.ImageDraw] = None,
         render_discord_emoji: bool = True,
+        render_custom_emoji: bool = False,
         emoji_scale_factor: float = 1.0,
         emoji_position_offset: Tuple[int, int] = (0, 0)
     ) -> None:
@@ -82,11 +83,13 @@ class Pilmoji:
         self._new_draw: bool = False
 
         self._render_discord_emoji: bool = render_discord_emoji
+        self._render_custom_emoji: bool = render_custom_emoji
         self._default_emoji_scale_factor: float = emoji_scale_factor
         self._default_emoji_position_offset: Tuple[int, int] = emoji_position_offset
 
         self._emoji_cache: Dict[str, BytesIO] = {}
         self._discord_emoji_cache: Dict[int, BytesIO] = {}
+        self._custom_emoji_cache: Dict[str, BytesIO] = {}
 
         self._create_draw()
 
@@ -137,8 +140,12 @@ class Pilmoji:
             for stream in self._discord_emoji_cache.values():
                 stream.close()
 
+            for stream in self._custom_emoji_cache.values():
+                stream.close()
+
             self._emoji_cache = {}
             self._discord_emoji_cache = {}
+            self._custom_emoji_cache = {}
 
         self._closed = True
 
@@ -171,6 +178,19 @@ class Pilmoji:
         if stream := self.source.get_discord_emoji(id):
             if self._cache:
                 self._discord_emoji_cache[id] = stream
+
+            stream.seek(0)
+            return stream
+
+    def _get_custom_emoji(self, tag: str, /) -> Optional[BytesIO]:
+        if self._cache and id in self._custom_emoji_cache:
+            entry = self._custom_emoji_cache[tag]
+            entry.seek(0)
+            return entry
+
+        if stream := self.source.get_custom_emoji(tag):
+            if self._cache:
+                self._custom_emoji_cache[tag] = stream
 
             stream.seek(0)
             return stream
@@ -337,9 +357,10 @@ class Pilmoji:
                 stream = None
                 if node.type is NodeType.emoji:
                     stream = self._get_emoji(content)
-
                 elif self._render_discord_emoji and node.type is NodeType.discord_emoji:
                     stream = self._get_discord_emoji(content)
+                elif self._render_custom_emoji and node.type is NodeType.custom_emoji:
+                    stream = self._get_custom_emoji(content)
                 
                 if stream:
                     streams[node_id][line_id] = stream
@@ -471,6 +492,7 @@ class Pilmoji:
                         ox, oy = emoji_position_offset
                         
                         self.image.paste(asset, (round(x + ox), round(line_y + oy)), asset)
+                        x += width * 0.2 # For some reason, emojis keep sliding left the more there are. This compensates
 
                 x += node_spacing + width
             y += line_spacing

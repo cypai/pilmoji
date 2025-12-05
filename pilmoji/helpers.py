@@ -18,21 +18,32 @@ if TYPE_CHECKING:
 # Create a dictionary mapping English emoji descriptions to their unicode representations
 # Only include emojis that have an English description and are fully qualified
 language_pack: Dict[str, str] = {
-    data['en']: emj
+    data["en"]: emj
     for emj, data in emoji.EMOJI_DATA.items()
-    if 'en' in data and data['status'] <= emoji.STATUS['fully_qualified']
+    if "en" in data and data["status"] <= emoji.STATUS["fully_qualified"]
 }
-_UNICODE_EMOJI_REGEX = '|'.join(map(re.escape, sorted(language_pack.values(), key=len, reverse=True)))
-_DISCORD_EMOJI_REGEX = '<a?:[a-zA-Z0-9_]{1,32}:[0-9]{17,22}>'
+_UNICODE_EMOJI_REGEX = "|".join(
+    map(re.escape, sorted(language_pack.values(), key=len, reverse=True))
+)
+_DISCORD_EMOJI_REGEX = "<a?:[a-zA-Z0-9_]{1,32}:[0-9]{17,22}>"
+_CUSTOM_EMOJI_REGEX = "<:[a-zA-Z0-9_-]{1,32}:>"
 
-EMOJI_REGEX: Final[re.Pattern[str]] = re.compile(f'({_UNICODE_EMOJI_REGEX}|{_DISCORD_EMOJI_REGEX})')
+EMOJI_REGEX: Final[re.Pattern[str]] = re.compile(
+    f"({_UNICODE_EMOJI_REGEX}|{_DISCORD_EMOJI_REGEX}|{_CUSTOM_EMOJI_REGEX})"
+)
+UNICODE_EMOJI_REGEX = re.compile(_UNICODE_EMOJI_REGEX)
+DISCORD_EMOJI_REGEX = re.compile(_DISCORD_EMOJI_REGEX)
+CUSTOM_EMOJI_REGEX = re.compile(_CUSTOM_EMOJI_REGEX)
 
 __all__ = (
-    'EMOJI_REGEX',
-    'Node',
-    'NodeType',
-    'to_nodes',
-    'getsize'
+    "EMOJI_REGEX",
+    "UNICODE_EMOJI_REGEX",
+    "DISCORD_EMOJI_REGEX",
+    "CUSTOM_EMOJI_REGEX",
+    "Node",
+    "NodeType",
+    "to_nodes",
+    "getsize",
 )
 
 
@@ -49,11 +60,14 @@ class NodeType(Enum):
         This node is a unicode emoji.
     discord_emoji
         This node is a Discord emoji.
+    custom_emoji
+        This node is a custom emoji.
     """
 
-    text          = 0
-    emoji         = 1
+    text = 0
+    emoji = 1
     discord_emoji = 2
+    custom_emoji = 3
 
 
 class Node(NamedTuple):
@@ -71,7 +85,7 @@ class Node(NamedTuple):
     content: str
 
     def __repr__(self) -> str:
-        return f'<Node type={self.type.name!r} content={self.content!r}>'
+        return f"<Node type={self.type.name!r} content={self.content!r}>"
 
 
 def _parse_line(line: str, /) -> List[Node]:
@@ -81,14 +95,14 @@ def _parse_line(line: str, /) -> List[Node]:
         if not chunk:
             continue
 
-        if not i % 2:
-            nodes.append(Node(NodeType.text, chunk))
-            continue
-
-        if len(chunk) > 18:  # This is guaranteed to be a Discord emoji
-            node = Node(NodeType.discord_emoji, chunk.split(':')[-1][:-1])
-        else:
+        if DISCORD_EMOJI_REGEX.match(chunk):
+            node = Node(NodeType.discord_emoji, chunk.split(":")[-1][:-1])
+        elif CUSTOM_EMOJI_REGEX.match(chunk):
+            node = Node(NodeType.custom_emoji, chunk[2:-2])
+        elif UNICODE_EMOJI_REGEX.match(chunk):
             node = Node(NodeType.emoji, chunk)
+        else:
+            node = Node(NodeType.text, chunk)
 
         nodes.append(node)
 
@@ -117,11 +131,7 @@ def to_nodes(text: str, /) -> List[List[Node]]:
 
 
 def getsize(
-    text: str,
-    font: FontT = None,
-    *,
-    spacing: int = 4,
-    emoji_scale_factor: float = 1
+    text: str, font: FontT = None, *, spacing: int = 4, emoji_scale_factor: float = 1
 ) -> Tuple[int, int]:
     """Return the width and height of the text when rendered.
     This method supports multiline text.
