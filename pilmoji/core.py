@@ -466,7 +466,7 @@ class Pilmoji:
                         *args,
                         **kwargs,
                     )
-                    coord = coord[0] + offset[0], coord[1] + offset[1]
+                    coord = coord[0] + offset[0], coord[1] + 13 # Hardcoded because I don't understand why it changes for certain lines
                 except AttributeError:
                     pass
                 x, line_y = coord
